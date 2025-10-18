@@ -385,6 +385,25 @@ mod tests {
     use super::*;
 
     #[test]
+    fn json_serialization_failure_preserves_reason_in_protocol_error() {
+        struct Unserializable;
+
+        impl Serialize for Unserializable {
+            fn serialize<S: serde::Serializer>(&self, _: S) -> Result<S::Ok, S::Error> {
+                Err(serde::ser::Error::custom("content cannot be encoded"))
+            }
+        }
+
+        let error = ContentBlock::json(Unserializable).unwrap_err();
+        assert_eq!(error.code, crate::model::ErrorCode::INTERNAL_ERROR);
+        assert_eq!(error.message, "fail to serialize response to json");
+        assert_eq!(
+            error.data,
+            Some(json!({"reason": "content cannot be encoded"}))
+        );
+    }
+
+    #[test]
     fn test_image_content_serialization() {
         let image = ImageContent::new("base64data", "image/png");
         let json = serde_json::to_string(&image).unwrap();

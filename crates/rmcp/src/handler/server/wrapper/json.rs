@@ -41,3 +41,29 @@ impl<T: Serialize + JsonSchema + 'static> IntoCallToolResult for Json<T> {
         Ok(CallToolResult::structured(value).into())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn serialization_failure_is_an_internal_error() {
+        #[derive(JsonSchema)]
+        struct Unserializable;
+
+        impl Serialize for Unserializable {
+            fn serialize<S: serde::Serializer>(&self, _: S) -> Result<S::Ok, S::Error> {
+                Err(serde::ser::Error::custom("intentional failure"))
+            }
+        }
+
+        let error = Json(Unserializable).into_call_tool_result().unwrap_err();
+        assert_eq!(
+            error,
+            crate::ErrorData::internal_error(
+                "Failed to serialize structured content: intentional failure",
+                None,
+            )
+        );
+    }
+}

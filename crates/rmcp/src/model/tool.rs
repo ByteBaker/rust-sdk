@@ -257,3 +257,25 @@ impl Tool {
         Value::Object(self.input_schema.as_ref().clone())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::ToolAnnotations;
+
+    #[test]
+    fn hint_queries_use_protocol_defaults_only_when_unspecified() {
+        for (destructive_hint, idempotent_hint, destructive, idempotent) in [
+            (None, None, true, false),
+            (Some(false), Some(true), false, true),
+            (Some(true), Some(false), true, false),
+        ] {
+            let annotations = ToolAnnotations {
+                destructive_hint,
+                idempotent_hint,
+                ..Default::default()
+            };
+            assert_eq!(annotations.is_destructive(), destructive);
+            assert_eq!(annotations.is_idempotent(), idempotent);
+        }
+    }
+}

@@ -2833,6 +2833,38 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn invalidation_rejects_in_flight_cache_writes() {
+        let peer = disconnected_peer();
+        let key = list_response_cache_key(TOOL_LIST_CACHE_PREFIX, &None);
+        let old_generation = peer.capture_response_cache_generation().await;
+        let expected = tools_result(Some(5_000), Some(CacheScope::Public));
+
+        peer.invalidate_tool_cache().await;
+        peer.cache_response_with_generation(
+            key.clone(),
+            ServerResult::ListToolsResult(expected.clone()),
+            expected.ttl_ms,
+            expected.cache_scope,
+            old_generation,
+        )
+        .await;
+        assert!(peer.stale_cached_response(&key).await.is_none());
+
+        peer.cache_response(
+            key.clone(),
+            ServerResult::ListToolsResult(expected.clone()),
+            expected.ttl_ms,
+            expected.cache_scope,
+        )
+        .await;
+        let Some(ServerResult::ListToolsResult(actual)) = peer.stale_cached_response(&key).await
+        else {
+            panic!("fresh-generation tools response was not stored");
+        };
+        assert_eq!(actual, expected);
+    }
+
+    #[tokio::test]
     async fn expired_entry_is_served_when_refetch_fails() {
         let peer = disconnected_peer();
         let params = None::<PaginatedRequestParams>;

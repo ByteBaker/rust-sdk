@@ -167,3 +167,69 @@ pub(crate) fn build_get_info(
         }
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn preserves_manual_tool_dispatch_methods() -> syn::Result<()> {
+        let input = quote! {
+            impl rmcp::ServerHandler for Server {
+                async fn call_tool(
+                    &self,
+                    _: rmcp::model::CallToolRequestParams,
+                    _: rmcp::service::RequestContext<rmcp::RoleServer>,
+                ) -> Result<rmcp::model::CallToolResponse, rmcp::ErrorData> {
+                    unreachable!("manual");
+                }
+
+                async fn list_tools(
+                    &self,
+                    _: Option<rmcp::model::PaginatedRequestParams>,
+                    _: rmcp::service::RequestContext<rmcp::RoleServer>,
+                ) -> Result<rmcp::model::ListToolsResult, rmcp::ErrorData> {
+                    unreachable!("manual");
+                }
+
+                fn get_tool(&self, _: &str) -> Option<rmcp::model::Tool> {
+                    unreachable!("manual");
+                }
+            }
+        };
+        let input = syn::parse2::<ItemImpl>(input)?;
+        for manual in ["call_tool", "list_tools", "get_tool"] {
+            let mut input = input.clone();
+            input
+                .items
+                .retain(|item| matches!(item, ImplItem::Fn(method) if method.sig.ident == manual));
+            let expanded = syn::parse2::<ItemImpl>(tool_handler(
+                TokenStream::new(),
+                input.into_token_stream(),
+            )?)?;
+
+            for name in ["call_tool", "list_tools", "get_tool"] {
+                let mut methods = expanded.items.iter().filter_map(|item| match item {
+                    ImplItem::Fn(method) if method.sig.ident == name => Some(method),
+                    _ => None,
+                });
+                let method = methods.next().expect(name);
+                assert!(
+                    methods.next().is_none(),
+                    "duplicate {name} with manual {manual}"
+                );
+                if name == manual {
+                    let [syn::Stmt::Macro(body)] = method.block.stmts.as_slice() else {
+                        panic!("{name} body was replaced");
+                    };
+                    assert!(body.mac.path.is_ident("unreachable"));
+                    assert_eq!(
+                        syn::parse2::<syn::LitStr>(body.mac.tokens.clone())?.value(),
+                        "manual"
+                    );
+                }
+            }
+        }
+        Ok(())
+    }
+}

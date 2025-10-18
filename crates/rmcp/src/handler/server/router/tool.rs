@@ -646,6 +646,22 @@ mod tests {
         params.project
     }
 
+    #[test]
+    fn unrelated_errors_are_not_converted_to_tool_results() {
+        for error in [
+            crate::ErrorData::invalid_params(
+                "application validation failed",
+                Some(serde_json::json!({"field": "project"})),
+            ),
+            crate::ErrorData::internal_error(
+                "failed to deserialize parameters: internal failure",
+                Some(serde_json::json!({"cause": "storage"})),
+            ),
+        ] {
+            assert_eq!(into_tool_argument_error(error.clone()).unwrap_err(), error);
+        }
+    }
+
     #[tokio::test]
     async fn test_argument_deserialization_error_returns_tool_error_result() {
         let service = DummyService;

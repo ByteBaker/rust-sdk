@@ -335,3 +335,17 @@ fn test_extensions() {
     assert_eq!(extensions.get::<bool>(), None);
     assert_eq!(extensions.get(), Some(&MyType(10)));
 }
+
+#[test]
+fn lazy_insertion_keeps_existing_value_without_evaluating_initializer() {
+    let mut extensions = Extensions::new();
+    let value = extensions.get_or_insert_with(|| String::from("initial"));
+    value.push_str(" value");
+
+    let value = extensions.get_or_insert_with(|| -> String {
+        panic!("initializer must not run for an existing type")
+    });
+    assert_eq!(value, "initial value");
+    value.push('!');
+    assert_eq!(extensions.get::<String>().unwrap(), "initial value!");
+}

@@ -117,6 +117,24 @@ mod test {
     use super::*;
 
     #[test]
+    fn server_handler_shorthand_rejects_trait_impls() {
+        let error = tool_router(
+            quote! { server_handler },
+            quote! {
+                impl ExistingTrait for Server {
+                    #[tool]
+                    fn example(&self) {}
+                }
+            },
+        )
+        .unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            "`server_handler` is only supported on inherent impl blocks (e.g. `impl MyType { ... }`)"
+        );
+    }
+
+    #[test]
     fn tool_router_attribute_parses_router_visibility_and_defaults_server_handler_off()
     -> syn::Result<()> {
         let attr = quote! {

@@ -56,3 +56,21 @@ impl RmcpError {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::{error::Error as _, io};
+
+    use super::RmcpError;
+
+    #[test]
+    fn transport_creation_preserves_underlying_io_error() {
+        let error = RmcpError::transport_creation::<()>(io::Error::new(
+            io::ErrorKind::ConnectionRefused,
+            "peer refused the connection",
+        ));
+        let source = error.source().unwrap().downcast_ref::<io::Error>().unwrap();
+        assert_eq!(source.kind(), io::ErrorKind::ConnectionRefused);
+        assert_eq!(source.to_string(), "peer refused the connection");
+    }
+}

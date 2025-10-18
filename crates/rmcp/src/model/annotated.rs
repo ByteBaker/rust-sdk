@@ -74,6 +74,24 @@ mod tests {
 
     use super::*;
 
+    #[rstest::rstest]
+    #[case::minimum(0.0)]
+    #[case::maximum(1.0)]
+    fn resource_priority_accepts_inclusive_bounds(#[case] priority: f32) {
+        let timestamp = Utc.timestamp_opt(0, 0).unwrap();
+        let annotations = Annotations::for_resource(priority, timestamp);
+        assert_eq!(annotations.priority, Some(priority));
+    }
+
+    #[rstest::rstest]
+    #[case::below_minimum(-0.1)]
+    #[case::above_maximum(1.1)]
+    #[case::not_a_number(f32::NAN)]
+    #[should_panic(expected = "Priority")]
+    fn resource_priority_rejects_invalid_values(#[case] priority: f32) {
+        Annotations::for_resource(priority, Utc.timestamp_opt(0, 0).unwrap());
+    }
+
     fn annotations_of(value: serde_json::Value) -> Annotations {
         serde_json::from_value::<Annotations>(value).unwrap()
     }

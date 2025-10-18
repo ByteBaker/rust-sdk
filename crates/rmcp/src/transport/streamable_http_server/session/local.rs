@@ -1308,6 +1308,57 @@ fn create_local_session_with_event_store(
 }
 
 #[cfg(test)]
+mod persistence_tests {
+    use super::{super::EventStream, *};
+
+    struct FailingEventStore;
+
+    #[async_trait::async_trait]
+    impl EventStore for FailingEventStore {
+        async fn store_event(
+            &self,
+            _: &str,
+            _: &ServerSseMessage,
+        ) -> Result<String, EventStoreError> {
+            Err(std::io::Error::new(std::io::ErrorKind::PermissionDenied, "not committed").into())
+        }
+
+        async fn replay_events_after(&self, _: &str) -> Result<EventStream, EventStoreError> {
+            unreachable!("sending an event must not request a replay")
+        }
+    }
+
+    #[tokio::test]
+    async fn failed_event_persistence_does_not_cache_or_deliver_the_event() {
+        let (tx, mut rx) = tokio::sync::mpsc::channel(1);
+        let mut cached = CachedTx::new(
+            tx,
+            None,
+            0,
+            "stream".into(),
+            Some(Arc::new(FailingEventStore)),
+        );
+
+        let error = cached
+            .send_priming(Duration::from_millis(10))
+            .await
+            .unwrap_err();
+        let SessionError::EventStore(error) = error else {
+            panic!("expected the event-store error");
+        };
+        assert_eq!(
+            error.downcast_ref::<std::io::Error>().unwrap().kind(),
+            std::io::ErrorKind::PermissionDenied
+        );
+        assert!(cached.cache.is_empty());
+        assert!(matches!(
+            rx.try_recv(),
+            Err(tokio::sync::mpsc::error::TryRecvError::Empty)
+        ));
+    }
+}
+
+#[cfg(test)]
 mod sep2260_routing_tests {
     use super::*;
     use crate::service::OriginatingRequestId;
